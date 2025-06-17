@@ -1,3 +1,779 @@
-test
+# VSCode Custom Formatter 프로젝트 파일들
 
-this is created by VSCode
+## 프로젝트 구조
+
+```
+my-custom-formatter/
+├── package.json
+├── tsconfig.json
+├── .gitignore
+├── README.md
+└── src/
+    ├── extension.ts
+    └── formatters/
+        ├── javaFormatter.ts
+        ├── sqlFormatter.ts
+        └── jsFormatter.ts
+```
+
+## 파일 내용
+
+### package.json
+
+```json
+{
+  "name": "my-custom-formatter",
+  "displayName": "My Custom Formatter",
+  "description": "Custom formatter for Java, SQL, and JavaScript",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Formatters"
+  ],
+  "activationEvents": [
+    "onLanguage:java",
+    "onLanguage:sql",
+    "onLanguage:javascript"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "myFormatter.formatDocument",
+        "title": "Format Document (My Style)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "myFormatter.formatDocument",
+        "key": "shift+alt+f",
+        "when": "editorTextFocus && !editorReadonly"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "My Custom Formatter",
+      "properties": {
+        "myFormatter.indentSize": {
+          "type": "number",
+          "default": 4,
+          "description": "Number of spaces for indentation"
+        },
+        "myFormatter.insertFinalNewline": {
+          "type": "boolean",
+          "default": true,
+          "description": "Insert a final newline at the end of file"
+        },
+        "myFormatter.trimTrailingWhitespace": {
+          "type": "boolean",
+          "default": true,
+          "description": "Remove trailing whitespace"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "16.x",
+    "typescript": "^4.9.4"
+  }
+}
+```
+
+### tsconfig.json
+
+```json
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "target": "ES2020",
+        "outDir": "out",
+        "lib": [
+            "ES2020"
+        ],
+        "sourceMap": true,
+        "rootDir": "src",
+        "strict": true
+    },
+    "exclude": [
+        "node_modules",
+        ".vscode-test"
+    ]
+}
+```
+
+### .gitignore
+
+```
+node_modules/
+out/
+*.vsix
+.vscode-test/
+.DS_Store
+```
+
+### README.md
+
+```markdown
+# My Custom Formatter
+
+Java, SQL, JavaScript를 위한 커스텀 VSCode 포맷터 확장입니다.
+
+## 기능
+- Java 파일 포맷팅
+- SQL 쿼리 포맷팅  
+- JavaScript 파일 포맷팅
+- 사용자 정의 들여쓰기 설정
+- 후행 공백 제거
+- 파일 끝 개행 추가
+
+## 설치 및 개발
+
+1. 의존성 설치:
+```bash
+npm install
+```
+
+1. 컴파일:
+
+```bash
+npm run compile
+```
+
+1. 개발 모드 실행:
+
+- VSCode에서 프로젝트 열기
+- F5 키를 눌러 Extension Development Host 실행
+
+## 사용법
+
+- `Shift+Alt+F` 키 또는
+- 명령 팔레트(`Ctrl+Shift+P`)에서 “Format Document (My Style)” 실행
+
+## 설정
+
+VSCode 설정에서 다음 항목들을 조정할 수 있습니다:
+
+- `myFormatter.indentSize`: 들여쓰기 크기 (기본값: 4)
+- `myFormatter.insertFinalNewline`: 파일 끝 개행 추가 (기본값: true)
+- `myFormatter.trimTrailingWhitespace`: 후행 공백 제거 (기본값: true)
+
+```
+### src/extension.ts
+```typescript
+import * as vscode from 'vscode';
+import { JavaFormatter } from './formatters/javaFormatter';
+import { SqlFormatter } from './formatters/sqlFormatter';
+import { JsFormatter } from './formatters/jsFormatter';
+
+export function activate(context: vscode.ExtensionContext) {
+    console.log('My Custom Formatter is now active!');
+
+    // 포맷터 인스턴스 생성
+    const javaFormatter = new JavaFormatter();
+    const sqlFormatter = new SqlFormatter();
+    const jsFormatter = new JsFormatter();
+
+    // 명령어 등록
+    const formatCommand = vscode.commands.registerCommand('myFormatter.formatDocument', async () => {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            return;
+        }
+
+        const document = editor.document;
+        const languageId = document.languageId;
+        const text = document.getText();
+
+        try {
+            let formattedText: string;
+            
+            switch (languageId) {
+                case 'java':
+                    formattedText = javaFormatter.format(text);
+                    break;
+                case 'sql':
+                    formattedText = sqlFormatter.format(text);
+                    break;
+                case 'javascript':
+                    formattedText = jsFormatter.format(text);
+                    break;
+                default:
+                    vscode.window.showWarningMessage('Unsupported language for formatting');
+                    return;
+            }
+
+            // 전체 문서 범위 설정
+            const fullRange = new vscode.Range(
+                document.positionAt(0),
+                document.positionAt(text.length)
+            );
+
+            // 포맷팅 적용
+            await editor.edit(editBuilder => {
+                editBuilder.replace(fullRange, formattedText);
+            });
+
+            vscode.window.showInformationMessage('Document formatted successfully!');
+        } catch (error) {
+            vscode.window.showErrorMessage(`Formatting failed: ${error}`);
+        }
+    });
+
+    // Document Format Provider 등록
+    const javaProvider = vscode.languages.registerDocumentFormattingEditProvider('java', {
+        provideDocumentFormattingEdits(document: vscode.TextDocument): vscode.TextEdit[] {
+            const text = document.getText();
+            const formatted = javaFormatter.format(text);
+            const fullRange = new vscode.Range(
+                document.positionAt(0),
+                document.positionAt(text.length)
+            );
+            return [vscode.TextEdit.replace(fullRange, formatted)];
+        }
+    });
+
+    const sqlProvider = vscode.languages.registerDocumentFormattingEditProvider('sql', {
+        provideDocumentFormattingEdits(document: vscode.TextDocument): vscode.TextEdit[] {
+            const text = document.getText();
+            const formatted = sqlFormatter.format(text);
+            const fullRange = new vscode.Range(
+                document.positionAt(0),
+                document.positionAt(text.length)
+            );
+            return [vscode.TextEdit.replace(fullRange, formatted)];
+        }
+    });
+
+    const jsProvider = vscode.languages.registerDocumentFormattingEditProvider('javascript', {
+        provideDocumentFormattingEdits(document: vscode.TextDocument): vscode.TextEdit[] {
+            const text = document.getText();
+            const formatted = jsFormatter.format(text);
+            const fullRange = new vscode.Range(
+                document.positionAt(0),
+                document.positionAt(text.length)
+            );
+            return [vscode.TextEdit.replace(fullRange, formatted)];
+        }
+    });
+
+    context.subscriptions.push(formatCommand, javaProvider, sqlProvider, jsProvider);
+}
+
+export function deactivate() {}
+
+// 설정값 가져오기 유틸리티
+export function getConfig() {
+    const config = vscode.workspace.getConfiguration('myFormatter');
+    return {
+        indentSize: config.get<number>('indentSize', 4),
+        insertFinalNewline: config.get<boolean>('insertFinalNewline', true),
+        trimTrailingWhitespace: config.get<boolean>('trimTrailingWhitespace', true)
+    };
+}
+```
+
+### src/formatters/javaFormatter.ts
+
+```typescript
+import { getConfig } from '../extension';
+
+export class JavaFormatter {
+    format(text: string): string {
+        const config = getConfig();
+        const indent = ' '.repeat(config.indentSize);
+        
+        // 기본 정리
+        let formatted = text
+            .replace(/\r\n/g, '\n')  // 개행 문자 통일
+            .replace(/\t/g, indent)  // 탭을 스페이스로 변환
+            .split('\n')
+            .map(line => line.trim())  // 각 줄 앞뒤 공백 제거
+            .join('\n');
+
+        // Java 스타일 포맷팅 규칙들
+        formatted = this.formatBraces(formatted, indent);
+        formatted = this.formatSpacing(formatted);
+        formatted = this.formatIndentation(formatted, indent);
+        
+        if (config.trimTrailingWhitespace) {
+            formatted = this.trimTrailingWhitespace(formatted);
+        }
+        
+        if (config.insertFinalNewline && !formatted.endsWith('\n')) {
+            formatted += '\n';
+        }
+
+        return formatted;
+    }
+
+    private formatBraces(text: string, indent: string): string {
+        const lines = text.split('\n');
+        const result: string[] = [];
+        let indentLevel = 0;
+
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i].trim();
+            
+            // 빈 줄 처리
+            if (line === '') {
+                result.push('');
+                continue;
+            }
+
+            // 닫는 괄호 처리
+            if (line.startsWith('}')) {
+                indentLevel--;
+                result.push(indent.repeat(Math.max(0, indentLevel)) + line);
+                continue;
+            }
+
+            // 현재 줄 추가
+            result.push(indent.repeat(indentLevel) + line);
+
+            // 여는 괄호 처리
+            if (line.endsWith('{')) {
+                indentLevel++;
+            }
+        }
+
+        return result.join('\n');
+    }
+
+    private formatSpacing(text: string): string {
+        return text
+            // 연산자 주변 공백
+            .replace(/([^=!<>])=([^=])/g, '$1 = $2')
+            .replace(/([^=!<>])==([^=])/g, '$1 == $2')
+            .replace(/([^=!<>])!=([^=])/g, '$1 != $2')
+            .replace(/([^<>])<=([^=])/g, '$1 <= $2')
+            .replace(/([^<>])>=([^=])/g, '$1 >= $2')
+            .replace(/([^<>])<([^=<>])/g, '$1 < $2')
+            .replace(/([^<>])>([^=<>])/g, '$1 > $2')
+            
+            // 쉼표 후 공백
+            .replace(/,([^\s])/g, ', $1')
+            
+            // 세미콜론 후 공백 (for문 내에서)
+            .replace(/;([^\s\n])/g, '; $1')
+            
+            // 키워드 후 공백
+            .replace(/\b(if|while|for|switch|catch)\(/g, '$1 (')
+            
+            // 메소드 호출과 정의 구분
+            .replace(/\b([a-zA-Z_][a-zA-Z0-9_]*)\s+\(/g, '$1(')
+            
+            // 중괄호 앞 공백
+            .replace(/\)\{/g, ') {')
+            .replace(/\s+\{/g, ' {');
+    }
+
+    private formatIndentation(text: string, indent: string): string {
+        const lines = text.split('\n');
+        const result: string[] = [];
+        let indentLevel = 0;
+
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            
+            if (trimmedLine === '') {
+                result.push('');
+                continue;
+            }
+
+            // 닫는 괄호는 들여쓰기 레벨을 먼저 감소
+            if (trimmedLine.startsWith('}')) {
+                indentLevel = Math.max(0, indentLevel - 1);
+            }
+
+            // case, default 문 처리
+            if (trimmedLine.startsWith('case ') || trimmedLine.startsWith('default:')) {
+                result.push(indent.repeat(Math.max(0, indentLevel - 1)) + trimmedLine);
+            } else {
+                result.push(indent.repeat(indentLevel) + trimmedLine);
+            }
+
+            // 여는 괄호는 들여쓰기 레벨 증가
+            if (trimmedLine.endsWith('{')) {
+                indentLevel++;
+            }
+        }
+
+        return result.join('\n');
+    }
+
+    private trimTrailingWhitespace(text: string): string {
+        return text
+            .split('\n')
+            .map(line => line.replace(/\s+$/, ''))
+            .join('\n');
+    }
+}
+```
+
+### src/formatters/sqlFormatter.ts
+
+```typescript
+import { getConfig } from '../extension';
+
+export class SqlFormatter {
+    private readonly keywords = [
+        'SELECT', 'FROM', 'WHERE', 'JOIN', 'INNER JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'FULL JOIN',
+        'GROUP BY', 'ORDER BY', 'HAVING', 'UNION', 'UNION ALL', 'INSERT', 'UPDATE', 'DELETE',
+        'CREATE', 'ALTER', 'DROP', 'TABLE', 'INDEX', 'VIEW', 'DATABASE', 'SCHEMA',
+        'AND', 'OR', 'NOT', 'IN', 'EXISTS', 'BETWEEN', 'LIKE', 'IS', 'NULL',
+        'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'DISTINCT', 'AS', 'ON', 'WHEN', 'THEN', 'ELSE', 'END',
+        'CASE', 'IF', 'COALESCE', 'ISNULL', 'SUBSTRING', 'CONCAT', 'TRIM', 'UPPER', 'LOWER'
+    ];
+
+    format(text: string): string {
+        const config = getConfig();
+        const indent = ' '.repeat(config.indentSize);
+        
+        // 기본 정리
+        let formatted = text
+            .replace(/\r\n/g, '\n')
+            .replace(/\t/g, indent)
+            .trim();
+
+        // SQL 포맷팅
+        formatted = this.formatKeywords(formatted);
+        formatted = this.formatStructure(formatted, indent);
+        formatted = this.formatSpacing(formatted);
+        
+        if (config.trimTrailingWhitespace) {
+            formatted = this.trimTrailingWhitespace(formatted);
+        }
+        
+        if (config.insertFinalNewline && !formatted.endsWith('\n')) {
+            formatted += '\n';
+        }
+
+        return formatted;
+    }
+
+    private formatKeywords(text: string): string {
+        let formatted = text;
+        
+        // 키워드를 대문자로 변환
+        for (const keyword of this.keywords) {
+            const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
+            formatted = formatted.replace(regex, keyword.toUpperCase());
+        }
+        
+        return formatted;
+    }
+
+    private formatStructure(text: string, indent: string): string {
+        // 세미콜론 후 줄바꿈
+        let formatted = text.replace(/;\s*/g, ';\n\n');
+        
+        // 주요 키워드 앞에 줄바꿈
+        const majorKeywords = ['SELECT', 'FROM', 'WHERE', 'GROUP BY', 'ORDER BY', 'HAVING'];
+        for (const keyword of majorKeywords) {
+            const regex = new RegExp(`\\s+${keyword}\\b`, 'g');
+            formatted = formatted.replace(regex, `\n${keyword}`);
+        }
+
+        // JOIN 키워드 처리
+        const joinKeywords = ['INNER JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'FULL JOIN', 'JOIN'];
+        for (const join of joinKeywords) {
+            const regex = new RegExp(`\\s+${join}\\b`, 'g');
+            formatted = formatted.replace(regex, `\n${indent}${join}`);
+        }
+
+        // SELECT 항목들 정리
+        formatted = this.formatSelectItems(formatted, indent);
+        
+        // 빈 줄 정리
+        formatted = formatted.replace(/\n\s*\n\s*\n/g, '\n\n');
+        
+        return formatted;
+    }
+
+    private formatSelectItems(text: string, indent: string): string {
+        const lines = text.split('\n');
+        const result: string[] = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            
+            if (line.startsWith('SELECT')) {
+                // SELECT 문 처리
+                const selectPart = line.substring(6).trim();
+                if (selectPart.includes(',')) {
+                    result.push('SELECT');
+                    const items = selectPart.split(',');
+                    for (let j = 0; j < items.length; j++) {
+                        const item = items[j].trim();
+                        if (j === items.length - 1) {
+                            result.push(`${indent}${item}`);
+                        } else {
+                            result.push(`${indent}${item},`);
+                        }
+                    }
+                } else {
+                    result.push(line);
+                }
+            } else if (line.includes(',') && !line.includes('(')) {
+                // 쉼표가 있는 일반 라인 처리 (괄호 안은 제외)
+                const items = line.split(',');
+                for (let j = 0; j < items.length; j++) {
+                    const item = items[j].trim();
+                    if (j === 0) {
+                        if (j === items.length - 1) {
+                            result.push(`${indent}${item}`);
+                        } else {
+                            result.push(`${indent}${item},`);
+                        }
+                    } else {
+                        if (j === items.length - 1) {
+                            result.push(`${indent}${item}`);
+                        } else {
+                            result.push(`${indent}${item},`);
+                        }
+                    }
+                }
+            } else {
+                result.push(line);
+            }
+        }
+        
+        return result.join('\n');
+    }
+
+    private formatSpacing(text: string): string {
+        return text
+            // 연산자 주변 공백
+            .replace(/([^=!<>])=([^=])/g, '$1 = $2')
+            .replace(/([^=!<>])==([^=])/g, '$1 = $2')  // SQL에서는 = 하나만 사용
+            .replace(/([^=!<>])!=([^=])/g, '$1 != $2')
+            .replace(/([^<>])<=([^=])/g, '$1 <= $2')
+            .replace(/([^<>])>=([^=])/g, '$1 >= $2')
+            .replace(/([^<>])<([^=<>])/g, '$1 < $2')
+            .replace(/([^<>])>([^=<>])/g, '$1 > $2')
+            
+            // AND, OR 주변 공백
+            .replace(/\bAND\b/g, ' AND ')
+            .replace(/\bOR\b/g, ' OR ')
+            
+            // 괄호 주변 공백 정리
+            .replace(/\s+\(/g, ' (')
+            .replace(/\(\s+/g, '(')
+            .replace(/\s+\)/g, ')')
+            
+            // 중복 공백 제거
+            .replace(/\s+/g, ' ');
+    }
+
+    private trimTrailingWhitespace(text: string): string {
+        return text
+            .split('\n')
+            .map(line => line.replace(/\s+$/, ''))
+            .join('\n');
+    }
+}
+```
+
+### src/formatters/jsFormatter.ts
+
+```typescript
+import { getConfig } from '../extension';
+
+export class JsFormatter {
+    format(text: string): string {
+        const config = getConfig();
+        const indent = ' '.repeat(config.indentSize);
+        
+        // 기본 정리
+        let formatted = text
+            .replace(/\r\n/g, '\n')
+            .replace(/\t/g, indent)
+            .split('\n')
+            .map(line => line.trim())
+            .join('\n');
+
+        // JavaScript 스타일 포맷팅
+        formatted = this.formatBraces(formatted, indent);
+        formatted = this.formatSpacing(formatted);
+        formatted = this.formatIndentation(formatted, indent);
+        formatted = this.formatFunctions(formatted);
+        
+        if (config.trimTrailingWhitespace) {
+            formatted = this.trimTrailingWhitespace(formatted);
+        }
+        
+        if (config.insertFinalNewline && !formatted.endsWith('\n')) {
+            formatted += '\n';
+        }
+
+        return formatted;
+    }
+
+    private formatBraces(text: string, indent: string): string {
+        const lines = text.split('\n');
+        const result: string[] = [];
+        let indentLevel = 0;
+
+        for (let i = 0; i < lines.length; i++) {
+            let line = lines[i].trim();
+            
+            if (line === '') {
+                result.push('');
+                continue;
+            }
+
+            // 닫는 괄호 처리
+            if (line.startsWith('}')) {
+                indentLevel--;
+                result.push(indent.repeat(Math.max(0, indentLevel)) + line);
+                continue;
+            }
+
+            // 현재 줄 추가
+            result.push(indent.repeat(indentLevel) + line);
+
+            // 여는 괄호 처리
+            if (line.endsWith('{')) {
+                indentLevel++;
+            }
+        }
+
+        return result.join('\n');
+    }
+
+    private formatSpacing(text: string): string {
+        return text
+            // 연산자 주변 공백
+            .replace(/([^=!<>+\-*/%])=([^=])/g, '$1 = $2')
+            .replace(/([^=!<>])==([^=])/g, '$1 == $2')
+            .replace(/([^=!<>])===([^=])/g, '$1 === $2')
+            .replace(/([^=!<>])!=([^=])/g, '$1 != $2')
+            .replace(/([^=!<>])!==([^=])/g, '$1 !== $2')
+            .replace(/([^<>])<=([^=])/g, '$1 <= $2')
+            .replace(/([^<>])>=([^=])/g, '$1 >= $2')
+            .replace(/([^<>])<([^=<>])/g, '$1 < $2')
+            .replace(/([^<>])>([^=<>])/g, '$1 > $2')
+            
+            // 산술 연산자
+            .replace(/([^+])\+([^+=])/g, '$1 + $2')
+            .replace(/([^-])-([^-=])/g, '$1 - $2')
+            .replace(/([^*])\*([^*=])/g, '$1 * $2')
+            .replace(/([^/])\/([^/=])/g, '$1 / $2')
+            .replace(/([^%])%([^=])/g, '$1 % $2')
+            
+            // 논리 연산자
+            .replace(/&&/g, ' && ')
+            .replace(/\|\|/g, ' || ')
+            
+            // 쉼표 후 공백
+            .replace(/,([^\s])/g, ', $1')
+            
+            // 세미콜론 후 공백 (for문 내에서)
+            .replace(/;([^\s\n])/g, '; $1')
+            
+            // 키워드 후 공백
+            .replace(/\b(if|while|for|switch|catch|with)\(/g, '$1 (')
+            
+            // function 키워드 처리
+            .replace(/\bfunction\s*\(/g, 'function(')
+            .replace(/\bfunction\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g, 'function $1(')
+            
+            // 중괄호 앞 공백
+            .replace(/\)\{/g, ') {')
+            .replace(/\s+\{/g, ' {')
+            
+            // 화살표 함수
+            .replace(/=>\s*\{/g, ' => {')
+            .replace(/=>/g, ' => ')
+            
+            // 중복 공백 제거
+            .replace(/\s+/g, ' ');
+    }
+
+    private formatFunctions(text: string): string {
+        return text
+            // 함수 선언 정리
+            .replace(/function\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g, 'function $1(')
+            
+            // 메서드 체이닝 정리
+            .replace(/\.\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g, '.$1(')
+            
+            // 객체 메서드 정리
+            .replace(/([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*function\s*\(/g, '$1: function(');
+    }
+
+    private formatIndentation(text: string, indent: string): string {
+        const lines = text.split('\n');
+        const result: string[] = [];
+        let indentLevel = 0;
+        let inMultiLineComment = false;
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            
+            if (line === '') {
+                result.push('');
+                continue;
+            }
+
+            // 멀티라인 주석 처리
+            if (line.startsWith('/*')) {
+                inMultiLineComment = true;
+            }
+            if (line.endsWith('*/')) {
+                inMultiLineComment = false;
+            }
+            if (inMultiLineComment && !line.startsWith('/*')) {
+                result.push(indent.repeat(indentLevel) + ' * ' + line.replace(/^\*\s*/, ''));
+                continue;
+            }
+
+            // 닫는 괄호는 들여쓰기 레벨을 먼저 감소
+            if (line.startsWith('}')) {
+                indentLevel = Math.max(0, indentLevel - 1);
+            }
+
+            // switch문의 case/default 처리
+            if (line.startsWith('case ') || line.startsWith('default:')) {
+                result.push(indent.repeat(Math.max(0, indentLevel - 1)) + line);
+            } else {
+                result.push(indent.repeat(indentLevel) + line);
+            }
+
+            // 여는 괄호는 들여쓰기 레벨 증가
+            if (line.endsWith('{')) {
+                indentLevel++;
+            }
+        }
+
+        return result.join('\n');
+    }
+
+    private trimTrailingWhitespace(text: string): string {
+        return text
+            .split('\n')
+            .map(line => line.replace(/\s+$/, ''))
+            .join('\n');
+    }
+}
+```
+
+## 설치 및 실행 가이드
+
+1. **프로젝트 폴더 생성 후 위 파일들을 각각 생성**
+1. **터미널에서 실행:**
+   
+   ```bash
+   cd my-custom-formatter
+   npm install
+   npm run compile
+   ```
+1. **VSCode에서 F5 눌러서 테스트**
